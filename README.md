@@ -26,8 +26,12 @@ Adafruit/Seeed PN532 libraries, and so on.
 > ([test/native](test/native)), and zmod_nfc read and decoded a mock tag
 > through it over a pseudo-terminal. Its drivers come from
 > [LaneTag](https://github.com/DIEHARDave/LaneTag), where
-> they have not been run on hardware either. All five board builds
+> they have not been run on hardware either. All six board builds
 > compile.
+>
+> **Seeed XIAO SAMD21:** the firmware runs on the board and answers the
+> host as a PN532 (`bridgectl.py info` works on Windows, no driver), but it
+> has **not been tested with any reader** wired to it yet.
 
 ## Drivers by board
 
@@ -55,6 +59,7 @@ Any of these boards, plus one reader module:
 | `esp32-s2` | Wemos/Lolin S2 Mini | GPIO 15 |
 | `esp32-c6` | ESP32-C6 DevKitC | none |
 | `esp32dev` | classic ESP32 DevKitC, DOIT, NodeMCU-32S | GPIO 2 |
+| `xiao-samd21` | Seeed XIAO SAMD21 (not an ESP32; untested with a reader) | yellow LED, pin 13 (active low) |
 
 ### Default pins
 
@@ -70,6 +75,29 @@ Any of these boards, plus one reader module:
 The I2C, UART and SPI pins do not overlap, so with the default `chip: auto`
 the bridge finds whichever reader is wired. Every pin can be changed (see
 [Settings](#settings)).
+
+### Seeed XIAO SAMD21
+
+**Not yet tested with a reader.** The SAMD21's I2C, UART and SPI sit on
+fixed pins, so only `ss`, `rst`, `busy` and `led` can be changed:
+
+| Signal | XIAO pin |
+|---|---|
+| PN532 I2C SDA / SCL | D4 / D5 |
+| PN532 UART RX / TX (XIAO side) | D7 / D6 |
+| SPI SCK / MISO / MOSI | D8 / D9 / D10 |
+| SPI SS (RC522 SDA, PN5180 NSS) | D3 |
+| RC522 / PN5180 RST | D2 |
+| PN5180 BUSY | D1 |
+
+- The XIAO's pins are **3.3 V only**; do not wire a reader's 5 V logic to them.
+- The PN532 on I2C needs the pull-ups on its own board (every PN532 board
+  has them). The SAMD21's internal pull-ups do not apply to the I2C pins,
+  so with nothing wired the bus floats; the bridge checks for pull-ups and
+  skips I2C when there are none.
+- I2C reads stop at 255 bytes (the SAMD core's Wire limit), so PN532
+  answers with more than 252 data bytes do not fit over I2C. UART has no
+  such limit.
 
 ### Wiring notes
 
@@ -114,6 +142,14 @@ python ~/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32c3 --port CO
   0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
   0x10000 $B/firmware.bin
 ```
+
+**XIAO SAMD21:** `pio run -e xiao-samd21 -t upload`. If the upload fails
+("No device found"), short RST to GND twice: an `Arduino` drive appears.
+Copy a UF2 of the firmware onto it (the drive goes away as the board
+restarts). PlatformIO builds only `firmware.bin`; convert it with
+Microsoft's [uf2conv.py](https://github.com/microsoft/uf2/blob/master/utils/uf2conv.py)
+(`uf2conv.py firmware.bin -c -b 0x2000 -f SAMD21 -o firmware.uf2`). If the board stops answering, unplug it and plug
+it back in before trying again.
 
 The serial port carries only PN532 frames, so the firmware prints nothing
 to it.
@@ -182,7 +218,9 @@ python tools/bridgectl.py --port COM6 scan            # print tags as they come
 | `sda`, `scl`, `rx`, `tx`, `sck`, `miso`, `mosi`, `ss`, `rst`, `busy` | GPIO numbers, -1 for not wired |
 | `led`, `led_active_low` | status LED, -1 for none |
 
-Settings are kept in flash and the bridge restarts to apply them.
+Settings are kept in flash and the bridge restarts to apply them. On the
+XIAO SAMD21 they live in the program flash, so a firmware upload resets
+them to the defaults.
 
 ## How it works
 

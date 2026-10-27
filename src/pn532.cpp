@@ -1,14 +1,22 @@
 #include "pn532.h"
 
+#if !defined(ARDUINO_ARCH_SAMD)
 #include <driver/gpio.h>
+#endif
 
 namespace {
 
 constexpr uint8_t I2C_ADDRESS = 0x24;
 // Read through the HAL, not Wire, so not limited by Wire's 128 byte buffer:
 // room for a full 262 byte response frame and the status byte.
+#if defined(ARDUINO_ARCH_SAMD)
+// SAMD: through Wire, whose requestFrom counts in a uint8_t, so 255 bytes
+// at most: responses over 252 data bytes do not fit.
+constexpr size_t I2C_MAX_READ = 255;
+#else
 constexpr size_t I2C_MAX_READ = 272;
 constexpr uint8_t I2C_BUS = 0;           // the bus behind Wire
+#endif
 
 constexpr uint8_t CMD_GET_FIRMWARE_VERSION = 0x02;
 constexpr uint8_t CMD_SAM_CONFIGURATION = 0x14;
@@ -28,12 +36,63 @@ void Pn532::attachI2C(TwoWire &wire, int sda, int scl) {
     wire_ = &wire;
     sda_ = sda;
     scl_ = scl;
+#if defined(ARDUINO_ARCH_SAMD)
+    wire_->begin();                         // fixed pins: SDA, SCL
+    wire_->setClock(100000);
+#else
     wire_->begin(sda, scl, 100000);
     wire_->setTimeOut(50);
+#endif
+}
+
+bool Pn532::pulledUp() {
+#if defined(ARDUINO_ARCH_SAMD)
+    // SAMD: the internal pull-ups do not apply once Wire owns the pins, so
+    // a bare bus floats, and the floating SDA reads as an ACK from every
+    // address. A line that reads high with the pull-up and low with the
+    // pull-down has nothing on it; every PN532 board has its own pull-ups.
+    if (bus_ != Pn532Bus::I2C || sda_ < 0 || scl_ < 0) return true;
+    wire_->end();
+    bool floating = false;
+    const int pins[] = {sda_, scl_};
+    for (int pin : pins) {
+        pinMode(pin, INPUT_PULLUP);
+        delayMicroseconds(10);
+        bool up = digitalRead(pin);
+        pinMode(pin, INPUT_PULLDOWN);
+        delayMicroseconds(10);
+        if (up && !digitalRead(pin)) floating = true;
+        pinMode(pin, INPUT);
+    }
+    wire_->begin();
+    wire_->setClock(100000);
+    return !floating;
+#else
+    return true;
+#endif
 }
 
 const char *Pn532::stuckLine() {
     if (bus_ != Pn532Bus::I2C || sda_ < 0 || scl_ < 0) return nullptr;
+#if defined(ARDUINO_ARCH_SAMD)
+    // SAMD Wire has no timeout: a line held low hangs it, so this check
+    // matters more here. The lines are read as GPIOs with Wire stopped,
+    // and SCL is pulsed by switching between output low and pull-up.
+    wire_->end();
+    pinMode(sda_, INPUT_PULLUP);
+    pinMode(scl_, INPUT_PULLUP);
+    delayMicroseconds(10);
+    for (int i = 0; i < 9 && digitalRead(scl_) && !digitalRead(sda_); i++) {
+        pinMode(scl_, OUTPUT);
+        digitalWrite(scl_, LOW);
+        delayMicroseconds(5);
+        pinMode(scl_, INPUT_PULLUP);
+        delayMicroseconds(5);
+    }
+    bool sdaHigh = digitalRead(sda_), sclHigh = digitalRead(scl_);
+    wire_->begin();
+    wire_->setClock(100000);
+#else
     // gpio_get_level, not digitalRead: Arduino core 3 refuses digitalRead on
     // a pin the I2C driver owns.
     if (gpio_get_level((gpio_num_t)sda_) && gpio_get_level((gpio_num_t)scl_)) return nullptr;
@@ -53,6 +112,7 @@ const char *Pn532::stuckLine() {
     bool sdaHigh = digitalRead(sda_), sclHigh = digitalRead(scl_);
     wire_->begin(sda_, scl_, 100000);
     wire_->setTimeOut(50);
+#endif
     if (!sclHigh) return "SCL";
     if (!sdaHigh) return "SDA";
     return nullptr;
@@ -61,8 +121,12 @@ const char *Pn532::stuckLine() {
 void Pn532::attachUart(HardwareSerial &serial, int rx, int tx, uint32_t baud) {
     bus_ = Pn532Bus::UART;
     serial_ = &serial;
+#if defined(ARDUINO_ARCH_SAMD)
+    serial_->begin(baud);                   // fixed pins: RX, TX
+#else
     serial_->setRxBufferSize(512);
     serial_->begin(baud, SERIAL_8N1, rx, tx);
+#endif
 }
 
 void Pn532::end() {
@@ -136,6 +200,18 @@ bool Pn532::i2cFill(size_t len, uint32_t deadline) {
     len = min(len + 1, I2C_MAX_READ);
     uint8_t buf[I2C_MAX_READ];
     while ((int32_t)(millis() - deadline) < 0) {
+#if defined(ARDUINO_ARCH_SAMD)
+        // A busy PN532 NAKs its address, and requestFrom returns 0.
+        if (wire_->requestFrom(I2C_ADDRESS, (size_t)1) == 1 && (wire_->read() & 0x01)) {
+            size_t got = wire_->requestFrom(I2C_ADDRESS, len);
+            for (size_t i = 0; i < got; i++) buf[i] = wire_->read();
+            if (got >= 2 && (buf[0] & 0x01)) {
+                rxLen_ = min(got - 1, sizeof(rx_));
+                memcpy(rx_, buf + 1, rxLen_);
+                return true;
+            }
+        }
+#else
         size_t got = 0;
         if (i2cRead(I2C_BUS, I2C_ADDRESS, buf, 1, 20, &got) == ESP_OK && got == 1 && (buf[0] & 0x01) &&
             i2cRead(I2C_BUS, I2C_ADDRESS, buf, len, 50, &got) == ESP_OK && got >= 2 && (buf[0] & 0x01)) {
@@ -143,6 +219,7 @@ bool Pn532::i2cFill(size_t len, uint32_t deadline) {
             memcpy(rx_, buf + 1, rxLen_);
             return true;
         }
+#endif
         delay(1);
     }
     return false;

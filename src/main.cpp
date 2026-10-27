@@ -9,7 +9,7 @@
 #include "config.h"
 #include "emulator.h"
 
-#if ARDUINO_USB_CDC_ON_BOOT
+#if ARDUINO_USB_CDC_ON_BOOT || defined(ARDUINO_ARCH_SAMD)
 #define HOST_IS_UART 0
 #else
 #define HOST_IS_UART 1
@@ -45,7 +45,13 @@ void setup() {
 #if HOST_IS_UART
     Serial.setRxBufferSize(1024);
 #endif
+#if defined(ARDUINO_ARCH_SAMD)
+    // The SAMD core drops writes while DTR is low unless begun this way;
+    // bridgectl and some PN532 hosts open the port with DTR off.
+    Serial.beginWithoutDTR(HOST_BAUD);
+#else
     Serial.begin(HOST_BAUD);
+#endif
     loadConfig(config);
     if (config.led >= 0) {
         pinMode(config.led, OUTPUT);

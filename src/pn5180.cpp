@@ -62,7 +62,11 @@ void Pn5180::attach(SPIClass &spi, int sck, int miso, int mosi, int nss, int bus
     pinMode(nss_, OUTPUT);
     digitalWrite(nss_, HIGH);
     pinMode(busy_, INPUT);
+#if defined(ARDUINO_ARCH_SAMD)
+    spi_->begin();                          // fixed pins: SCK, MISO, MOSI
+#else
     spi_->begin(sck, miso, mosi, -1);
+#endif
 }
 
 void Pn5180::end() {

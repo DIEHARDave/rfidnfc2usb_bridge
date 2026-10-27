@@ -74,7 +74,11 @@ void Rc522::attach(SPIClass &spi, int sck, int miso, int mosi, int ss, int rst) 
     rst_ = rst;
     pinMode(ss_, OUTPUT);
     digitalWrite(ss_, HIGH);
+#if defined(ARDUINO_ARCH_SAMD)
+    spi_->begin();                          // fixed pins: SCK, MISO, MOSI
+#else
     spi_->begin(sck, miso, mosi, -1);
+#endif
 }
 
 void Rc522::end() {

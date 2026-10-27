@@ -29,6 +29,8 @@ public:
     // clocking out a device stuck mid-byte), else nullptr. Transfers on
     // such a bus each hang until they time out.
     const char *stuckLine();
+    // I2C: false when SDA or SCL has no pull-up, i.e. nothing is wired.
+    bool pulledUp();
     void end() override;
     bool ready() const override { return ok_; }
     const char *chipName() const override { return "PN532"; }

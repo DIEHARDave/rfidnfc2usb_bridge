@@ -4,6 +4,12 @@
 
 #include "version.h"
 
+#if defined(ARDUINO_ARCH_SAMD)
+#define BOARD_NAME "samd21"
+#else
+#define BOARD_NAME CONFIG_IDF_TARGET
+#endif
+
 namespace {
 
 // PN532 commands (UM0701-02, section 7)
@@ -275,7 +281,11 @@ void Emulator::poll() {
         sendFrame(resp, n + 2);
         if (restart_) {
             delay(100);
+#if defined(ARDUINO_ARCH_SAMD)
+            NVIC_SystemReset();
+#else
             ESP.restart();
+#endif
         }
     }
 }
@@ -633,7 +643,7 @@ int Emulator::bridgeInfo(uint8_t *out) {
     }
     out[pos++] = code;
     out[pos++] = chip && chip->hasIso15693() ? 0x01 : 0x00;
-    String text = String("firmware=") + FIRMWARE_VERSION + ";board=" + CONFIG_IDF_TARGET +
+    String text = String("firmware=") + FIRMWARE_VERSION + ";board=" + BOARD_NAME +
                   ";reader=" + backend_.describe() + ";setting=" + chipSettingName(config_.chip);
     size_t n = min((size_t)text.length(), MAX_DATA - pos);
     memcpy(out + pos, text.c_str(), n);
@@ -685,11 +695,11 @@ int Emulator::setConfig(const uint8_t *p, size_t len, uint8_t *out) {
     } else {
         Config next = config_;
         error = configFromJson(next, doc.as<JsonObjectConst>());
-        if (error.isEmpty()) saveConfig(next);
+        if (!error.length()) saveConfig(next);
     }
-    out[0] = error.isEmpty() ? ST_OK : 0x01;
+    out[0] = !error.length() ? ST_OK : 0x01;
     // The new settings apply after a restart, which follows the answer.
-    restart_ = error.isEmpty();
+    restart_ = !error.length();
     size_t n = min((size_t)error.length(), MAX_DATA - 1);
     memcpy(out + 1, error.c_str(), n);
     return n + 1;

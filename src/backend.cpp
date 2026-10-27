@@ -24,6 +24,11 @@ bool Backend::tryChip(ChipSetting chip, bool probing) {
         pn532_.attachI2C(Wire, config_.sda, config_.scl);
         // With a line held low every transfer waits for its timeout (about
         // a second each on the classic ESP32), stalling the host link.
+        if (!pn532_.pulledUp()) {
+            stuck_ = nullptr;
+            pn532_.end();
+            break;
+        }
         stuck_ = pn532_.stuckLine();
         if (!stuck_ && (!probing || pn532_.present()) && pn532_.init()) chip_ = &pn532_;
         else pn532_.end();

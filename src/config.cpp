@@ -1,15 +1,38 @@
 #include "config.h"
 
+#if defined(ARDUINO_ARCH_SAMD)
+#include <FlashStorage.h>
+#else
 #include <Preferences.h>
+#endif
 
 namespace {
 
+#if defined(ARDUINO_ARCH_SAMD)
+// SAMD has no NVS: the JSON goes in a flash row of the program image, which
+// a firmware upload erases. magic tells a saved row from an erased one.
+struct StoredConfig {
+    uint32_t magic;
+    char text[384];
+};
+constexpr uint32_t STORED_MAGIC = 0x6E663275;   // "nf2u"
+FlashStorage(configStore, StoredConfig);
+#else
 const char *const NVS_NAMESPACE = "nfc2usb";
 const char *const NVS_KEY = "config";
+#endif
 
 // Default pins per board. The I2C, UART and SPI pins do not overlap, so
 // "auto" can probe every chip without one probe disturbing another reader.
-#if CONFIG_IDF_TARGET_ESP32S3
+#if defined(ARDUINO_ARCH_SAMD)
+// Seeed XIAO SAMD21: I2C on D4/D5, UART on D6 (TX) / D7 (RX) and SPI on
+// D8-D10 are fixed; the yellow LED (pin 13) is lit when low. SS, RST and
+// BUSY take D3, D2 and D1.
+constexpr int SDA = 4, SCL = 5, RX = 7, TX = 6;
+constexpr int SCK = 8, MISO = 9, MOSI = 10, SS = 3, RST = 2, BUSY = 1;
+constexpr int LED = 13;
+constexpr bool LED_LOW = true;
+#elif CONFIG_IDF_TARGET_ESP32S3
 // ESP32-S3 DevKitC (its RGB LED is addressable, so no status LED).
 constexpr int SDA = 8, SCL = 9, RX = 18, TX = 17;
 constexpr int SCK = 12, MISO = 13, MOSI = 11, SS = 10, RST = 14, BUSY = 15;
@@ -77,17 +100,57 @@ const char *chipSettingName(ChipSetting chip) {
     return i < sizeof(CHIP_NAMES) / sizeof(CHIP_NAMES[0]) ? CHIP_NAMES[i] : "?";
 }
 
+#if defined(ARDUINO_ARCH_SAMD)
+namespace {
+
+String readStored() {
+    StoredConfig stored = configStore.read();
+    if (stored.magic != STORED_MAGIC) return "";
+    stored.text[sizeof(stored.text) - 1] = 0;
+    return stored.text;
+}
+
+void writeStored(const String &text) {
+    StoredConfig stored = {};
+    if (text.length() >= sizeof(stored.text)) return;
+    stored.magic = text.length() ? STORED_MAGIC : 0;
+    memcpy(stored.text, text.c_str(), text.length());
+    configStore.write(stored);
+}
+
+}  // namespace
+
+void loadConfig(Config &config) {
+    setDefaults(config);
+    String text = readStored();
+    if (!text.length()) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, text)) return;
+    Config loaded = config;
+    if (configFromJson(loaded, doc.as<JsonObjectConst>()).length() == 0) config = loaded;
+}
+
+void saveConfig(const Config &config) {
+    JsonDocument doc;
+    configToJson(config, doc.to<JsonObject>());
+    String text;
+    serializeJson(doc, text);
+    writeStored(text);
+}
+
+void resetConfig() { writeStored(""); }
+#else
 void loadConfig(Config &config) {
     setDefaults(config);
     Preferences prefs;
     if (!prefs.begin(NVS_NAMESPACE, true)) return;
     String text = prefs.getString(NVS_KEY, "");
     prefs.end();
-    if (text.isEmpty()) return;
+    if (!text.length()) return;
     JsonDocument doc;
     if (deserializeJson(doc, text)) return;
     Config loaded = config;
-    if (configFromJson(loaded, doc.as<JsonObjectConst>()).isEmpty()) config = loaded;
+    if (configFromJson(loaded, doc.as<JsonObjectConst>()).length() == 0) config = loaded;
 }
 
 void saveConfig(const Config &config) {
@@ -107,6 +170,7 @@ void resetConfig() {
     prefs.clear();
     prefs.end();
 }
+#endif
 
 void configToJson(const Config &config, JsonObject out) {
     out["chip"] = chipSettingName(config.chip);
