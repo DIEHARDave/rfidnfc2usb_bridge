@@ -5,9 +5,13 @@
 #include "version.h"
 
 #if defined(ARDUINO_ARCH_SAMD)
-#define BOARD_NAME "samd21"
+#define BRIDGE_BOARD "samd21"
+#elif defined(PICO_RP2350)
+#define BRIDGE_BOARD "rp2350"
+#elif defined(ARDUINO_ARCH_RP2040)
+#define BRIDGE_BOARD "rp2040"
 #else
-#define BOARD_NAME CONFIG_IDF_TARGET
+#define BRIDGE_BOARD CONFIG_IDF_TARGET
 #endif
 
 namespace {
@@ -283,6 +287,8 @@ void Emulator::poll() {
             delay(100);
 #if defined(ARDUINO_ARCH_SAMD)
             NVIC_SystemReset();
+#elif defined(ARDUINO_ARCH_RP2040)
+            rp2040.reboot();
 #else
             ESP.restart();
 #endif
@@ -643,7 +649,7 @@ int Emulator::bridgeInfo(uint8_t *out) {
     }
     out[pos++] = code;
     out[pos++] = chip && chip->hasIso15693() ? 0x01 : 0x00;
-    String text = String("firmware=") + FIRMWARE_VERSION + ";board=" + BOARD_NAME +
+    String text = String("firmware=") + FIRMWARE_VERSION + ";board=" + BRIDGE_BOARD +
                   ";reader=" + backend_.describe() + ";setting=" + chipSettingName(config_.chip);
     size_t n = min((size_t)text.length(), MAX_DATA - pos);
     memcpy(out + pos, text.c_str(), n);

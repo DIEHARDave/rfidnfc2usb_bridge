@@ -9,7 +9,7 @@
 #include "config.h"
 #include "emulator.h"
 
-#if ARDUINO_USB_CDC_ON_BOOT || defined(ARDUINO_ARCH_SAMD)
+#if ARDUINO_USB_CDC_ON_BOOT || defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_RP2040)
 #define HOST_IS_UART 0
 #else
 #define HOST_IS_UART 1
@@ -49,6 +49,10 @@ void setup() {
     // The SAMD core drops writes while DTR is low unless begun this way;
     // bridgectl and some PN532 hosts open the port with DTR off.
     Serial.beginWithoutDTR(HOST_BAUD);
+#elif defined(ARDUINO_ARCH_RP2040)
+    // Likewise: arduino-pico drops writes while DTR is low by default.
+    Serial.ignoreFlowControl(true);
+    Serial.begin(HOST_BAUD);
 #else
     Serial.begin(HOST_BAUD);
 #endif

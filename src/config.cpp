@@ -2,21 +2,27 @@
 
 #if defined(ARDUINO_ARCH_SAMD)
 #include <FlashStorage.h>
+#elif defined(ARDUINO_ARCH_RP2040)
+#include <EEPROM.h>
 #else
 #include <Preferences.h>
 #endif
 
 namespace {
 
-#if defined(ARDUINO_ARCH_SAMD)
+#if defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_RP2040)
 // SAMD has no NVS: the JSON goes in a flash row of the program image, which
-// a firmware upload erases. magic tells a saved row from an erased one.
+// a firmware upload erases. The RP2040 / RP2350 core keeps it in the
+// emulated EEPROM, the last flash sector, which a UF2 upload leaves alone.
+// magic tells a saved record from an erased one.
 struct StoredConfig {
     uint32_t magic;
     char text[384];
 };
 constexpr uint32_t STORED_MAGIC = 0x6E663275;   // "nf2u"
+#if defined(ARDUINO_ARCH_SAMD)
 FlashStorage(configStore, StoredConfig);
+#endif
 #else
 const char *const NVS_NAMESPACE = "nfc2usb";
 const char *const NVS_KEY = "config";
@@ -31,6 +37,17 @@ const char *const NVS_KEY = "config";
 constexpr int SDA = 4, SCL = 5, RX = 7, TX = 6;
 constexpr int SCK = 8, MISO = 9, MOSI = 10, SS = 3, RST = 2, BUSY = 1;
 constexpr int LED = 13;
+constexpr bool LED_LOW = true;
+#elif defined(ARDUINO_ARCH_RP2040)
+// Seeed XIAO RP2350, on the XIAO SAMD21's pads: I2C1 on D4/D5 (GPIO 6/7),
+// UART0 on D6 (TX, GPIO 0) / D7 (RX, GPIO 1), SPI0 on D8-D10 (GPIO 2, 4, 3).
+// SS, RST and BUSY take D3, D2 and D1 (GPIO 5, 28, 27). The yellow user LED
+// on GPIO 25 is lit when low. The core's SDA and SCL are macros.
+#undef SDA
+#undef SCL
+constexpr int SDA = 6, SCL = 7, RX = 1, TX = 0;
+constexpr int SCK = 2, MISO = 4, MOSI = 3, SS = 5, RST = 28, BUSY = 27;
+constexpr int LED = 25;
 constexpr bool LED_LOW = true;
 #elif CONFIG_IDF_TARGET_ESP32S3
 // ESP32-S3 DevKitC (its RGB LED is addressable, so no status LED).
@@ -88,7 +105,11 @@ bool pin(JsonVariantConst value, int &out) {
     if (value.isNull()) return true;
     if (!value.is<int>()) return false;
     int n = value.as<int>();
+#if defined(ARDUINO_ARCH_RP2040)
+    if (n < -1 || n >= __GPIOCNT) return false;     // 30 pins, or 48 on the RP2350B
+#else
     if (n < -1 || n > 48) return false;
+#endif
     out = n;
     return true;
 }
@@ -100,11 +121,29 @@ const char *chipSettingName(ChipSetting chip) {
     return i < sizeof(CHIP_NAMES) / sizeof(CHIP_NAMES[0]) ? CHIP_NAMES[i] : "?";
 }
 
-#if defined(ARDUINO_ARCH_SAMD)
+#if defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_RP2040)
 namespace {
 
+#if defined(ARDUINO_ARCH_RP2040)
+StoredConfig readRecord() {
+    StoredConfig stored;
+    EEPROM.begin(sizeof(StoredConfig));
+    EEPROM.get(0, stored);
+    return stored;
+}
+
+void writeRecord(const StoredConfig &stored) {
+    EEPROM.begin(sizeof(StoredConfig));
+    EEPROM.put(0, stored);
+    EEPROM.commit();
+}
+#else
+StoredConfig readRecord() { return configStore.read(); }
+void writeRecord(const StoredConfig &stored) { configStore.write(stored); }
+#endif
+
 String readStored() {
-    StoredConfig stored = configStore.read();
+    StoredConfig stored = readRecord();
     if (stored.magic != STORED_MAGIC) return "";
     stored.text[sizeof(stored.text) - 1] = 0;
     return stored.text;
@@ -115,7 +154,7 @@ void writeStored(const String &text) {
     if (text.length() >= sizeof(stored.text)) return;
     stored.magic = text.length() ? STORED_MAGIC : 0;
     memcpy(stored.text, text.c_str(), text.length());
-    configStore.write(stored);
+    writeRecord(stored);
 }
 
 }  // namespace
@@ -212,6 +251,23 @@ String configFromJson(Config &config, JsonObjectConst in) {
         if (!low.is<bool>()) return "led_active_low must be true or false";
         next.ledActiveLow = low.as<bool>();
     }
+
+#if defined(ARDUINO_ARCH_RP2040)
+    // The core halts on a bus pin its block cannot use, and the settings
+    // outlive a firmware upload, so a bad pin is refused here.
+    if ((next.sda >= 0) != (next.scl >= 0)) return "sda and scl are set together";
+    if (next.sda >= 0 && (next.sda % 2 != 0 || next.scl % 2 != 1 || rpI2cBlock(next.sda) != rpI2cBlock(next.scl)))
+        return "sda and scl must be an I2C SDA/SCL pair of one block (e.g. 4/5 or 6/7)";
+    if ((next.rx >= 0) != (next.tx >= 0)) return "rx and tx are set together";
+    if (next.tx >= 0 && (next.tx % 4 != 0 || next.rx % 4 != 1 || rpUartBlock(next.tx) != rpUartBlock(next.rx)))
+        return "tx and rx must be a UART TX/RX pair of one block (e.g. 0/1 or 4/5)";
+    if (next.sck >= 0 || next.miso >= 0 || next.mosi >= 0) {
+        if (next.sck < 0 || next.miso < 0 || next.mosi < 0) return "sck, miso and mosi are set together";
+        if (next.sck % 4 != 2 || next.mosi % 4 != 3 || next.miso % 4 != 0 ||
+            rpSpiBlock(next.sck) != rpSpiBlock(next.mosi) || rpSpiBlock(next.sck) != rpSpiBlock(next.miso))
+            return "sck, mosi and miso must be SPI SCK/TX/RX pins of one block (e.g. 2/3/4)";
+    }
+#endif
 
     bool i2c = next.chip == ChipSetting::Auto || next.chip == ChipSetting::Pn532I2C;
     bool uart = next.chip == ChipSetting::Pn532Uart;

@@ -26,12 +26,17 @@ Adafruit/Seeed PN532 libraries, and so on.
 > ([test/native](test/native)), and zmod_nfc read and decoded a mock tag
 > through it over a pseudo-terminal. Its drivers come from
 > [LaneTag](https://github.com/DIEHARDave/LaneTag), where
-> they have not been run on hardware either. All six board builds
+> they have not been run on hardware either. All seven board builds
 > compile.
 >
 > **Seeed XIAO SAMD21:** the firmware runs on the board and answers the
 > host as a PN532 (`bridgectl.py info` works on Windows, no driver), but it
 > has **not been tested with any reader** wired to it yet.
+>
+> **Seeed XIAO RP2350:** the same: it flashes over USB, answers the host
+> as a PN532 (`bridgectl.py info`), saves its settings across a restart and
+> refuses pins its I2C, UART or SPI blocks cannot use, but it has **not been
+> tested with any reader**.
 
 ## Drivers by board
 
@@ -60,6 +65,7 @@ Any of these boards, plus one reader module:
 | `esp32-c6` | ESP32-C6 DevKitC | none |
 | `esp32dev` | classic ESP32 DevKitC, DOIT, NodeMCU-32S | GPIO 2 |
 | `xiao-samd21` | Seeed XIAO SAMD21 (not an ESP32; untested with a reader) | yellow LED, pin 13 (active low) |
+| `xiao-rp2350` | Seeed XIAO RP2350 (not an ESP32; untested) | yellow LED, GPIO 25 (active low) |
 
 ### Default pins
 
@@ -98,6 +104,26 @@ fixed pins, so only `ss`, `rst`, `busy` and `led` can be changed:
 - I2C reads stop at 255 bytes (the SAMD core's Wire limit), so PN532
   answers with more than 252 data bytes do not fit over I2C. UART has no
   such limit.
+
+### Seeed XIAO RP2350
+
+**Not yet tested with a reader.** The defaults use the same pads as the XIAO SAMD21; the
+settings take GPIO numbers:
+
+| Signal | XIAO pin | GPIO |
+|---|---|---|
+| PN532 I2C SDA / SCL (I2C1) | D4 / D5 | 6 / 7 |
+| PN532 UART RX / TX (UART0, XIAO side) | D7 / D6 | 1 / 0 |
+| SPI SCK / MISO / MOSI (SPI0) | D8 / D9 / D10 | 2 / 4 / 3 |
+| SPI SS (RC522 SDA, PN5180 NSS) | D3 | 5 |
+| RC522 / PN5180 RST | D2 | 28 |
+| PN5180 BUSY | D1 | 27 |
+
+- The pins are **3.3 V only**.
+- The I2C, UART and SPI pins can move, but only to pins their hardware block
+  can use (SDA/SCL pairs such as 4/5 or 6/7; UART TX/RX such as 0/1 or 4/5;
+  SPI SCK/MOSI/MISO such as 2/3/4 or 10/11/12). The bridge refuses any
+  other pins: the core would halt on them.
 
 ### Wiring notes
 
@@ -150,6 +176,10 @@ restarts). PlatformIO builds only `firmware.bin`; convert it with
 Microsoft's [uf2conv.py](https://github.com/microsoft/uf2/blob/master/utils/uf2conv.py)
 (`uf2conv.py firmware.bin -c -b 0x2000 -f SAMD21 -o firmware.uf2`). If the board stops answering, unplug it and plug
 it back in before trying again.
+
+**XIAO RP2350:** `pio run -e xiao-rp2350 -t upload`. If no port shows up,
+hold BOOT while plugging the board in: an `RP2350` drive appears, and
+`.pio/build/xiao-rp2350/firmware.uf2` can be copied onto it.
 
 The serial port carries only PN532 frames, so the firmware prints nothing
 to it.
@@ -220,7 +250,8 @@ python tools/bridgectl.py --port COM6 scan            # print tags as they come
 
 Settings are kept in flash and the bridge restarts to apply them. On the
 XIAO SAMD21 they live in the program flash, so a firmware upload resets
-them to the defaults.
+them to the defaults; on the XIAO RP2350 they live in the last flash
+sector and survive an upload (`bridgectl.py reset-config` clears them).
 
 ## How it works
 

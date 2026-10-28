@@ -24,6 +24,15 @@ struct Config {
     bool ledActiveLow = false;
 };
 
+#if defined(ARDUINO_ARCH_RP2040)
+// RP2040 / RP2350: each GPIO reaches one I2C, UART and SPI block, so the
+// pins pick the block (0 or 1). SDA, UART TX and SPI RX sit on pins 0 mod 4
+// (or 2 for I2C1), and the blocks alternate every 2, 8 and 8 pins.
+inline int rpI2cBlock(int pin) { return (pin / 2) % 2; }
+inline int rpUartBlock(int pin) { return ((pin + 4) / 8) % 2; }
+inline int rpSpiBlock(int pin) { return (pin / 8) % 2; }
+#endif
+
 const char *chipSettingName(ChipSetting chip);
 
 void loadConfig(Config &config);

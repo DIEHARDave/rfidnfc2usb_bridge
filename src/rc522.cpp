@@ -76,6 +76,12 @@ void Rc522::attach(SPIClass &spi, int sck, int miso, int mosi, int ss, int rst) 
     digitalWrite(ss_, HIGH);
 #if defined(ARDUINO_ARCH_SAMD)
     spi_->begin();                          // fixed pins: SCK, MISO, MOSI
+#elif defined(ARDUINO_ARCH_RP2040)
+    SPIClassRP2040 &rp = static_cast<SPIClassRP2040 &>(spi);
+    rp.setSCK(sck);
+    rp.setRX(miso);
+    rp.setTX(mosi);
+    rp.begin();
 #else
     spi_->begin(sck, miso, mosi, -1);
 #endif

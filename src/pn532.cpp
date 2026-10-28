@@ -1,6 +1,8 @@
 #include "pn532.h"
 
-#if !defined(ARDUINO_ARCH_SAMD)
+#if defined(ARDUINO_ARCH_RP2040)
+#include <hardware/i2c.h>
+#elif !defined(ARDUINO_ARCH_SAMD)
 #include <driver/gpio.h>
 #endif
 
@@ -13,6 +15,8 @@ constexpr uint8_t I2C_ADDRESS = 0x24;
 // SAMD: through Wire, whose requestFrom counts in a uint8_t, so 255 bytes
 // at most: responses over 252 data bytes do not fit.
 constexpr size_t I2C_MAX_READ = 255;
+#elif defined(ARDUINO_ARCH_RP2040)
+constexpr size_t I2C_MAX_READ = 272;     // through the SDK, past Wire's buffer
 #else
 constexpr size_t I2C_MAX_READ = 272;
 constexpr uint8_t I2C_BUS = 0;           // the bus behind Wire
@@ -39,6 +43,13 @@ void Pn532::attachI2C(TwoWire &wire, int sda, int scl) {
 #if defined(ARDUINO_ARCH_SAMD)
     wire_->begin();                         // fixed pins: SDA, SCL
     wire_->setClock(100000);
+#elif defined(ARDUINO_ARCH_RP2040)
+    // configFromJson checked the pins: the core halts on an illegal one.
+    wire_->setSDA(sda);
+    wire_->setSCL(scl);
+    wire_->setClock(100000);
+    wire_->begin();
+    wire_->setTimeout(50);
 #else
     wire_->begin(sda, scl, 100000);
     wire_->setTimeOut(50);
@@ -74,9 +85,9 @@ bool Pn532::pulledUp() {
 
 const char *Pn532::stuckLine() {
     if (bus_ != Pn532Bus::I2C || sda_ < 0 || scl_ < 0) return nullptr;
-#if defined(ARDUINO_ARCH_SAMD)
+#if defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_ARCH_RP2040)
     // SAMD Wire has no timeout: a line held low hangs it, so this check
-    // matters more here. The lines are read as GPIOs with Wire stopped,
+    // matters more there. The lines are read as GPIOs with Wire stopped,
     // and SCL is pulsed by switching between output low and pull-up.
     wire_->end();
     pinMode(sda_, INPUT_PULLUP);
@@ -123,6 +134,12 @@ void Pn532::attachUart(HardwareSerial &serial, int rx, int tx, uint32_t baud) {
     serial_ = &serial;
 #if defined(ARDUINO_ARCH_SAMD)
     serial_->begin(baud);                   // fixed pins: RX, TX
+#elif defined(ARDUINO_ARCH_RP2040)
+    SerialUART &uart = static_cast<SerialUART &>(serial);
+    uart.setRX(rx);
+    uart.setTX(tx);
+    uart.setFIFOSize(512);
+    uart.begin(baud);
 #else
     serial_->setRxBufferSize(512);
     serial_->begin(baud, SERIAL_8N1, rx, tx);
@@ -207,6 +224,18 @@ bool Pn532::i2cFill(size_t len, uint32_t deadline) {
             for (size_t i = 0; i < got; i++) buf[i] = wire_->read();
             if (got >= 2 && (buf[0] & 0x01)) {
                 rxLen_ = min(got - 1, sizeof(rx_));
+                memcpy(rx_, buf + 1, rxLen_);
+                return true;
+            }
+        }
+#elif defined(ARDUINO_ARCH_RP2040)
+        // Through the SDK, as on the ESP32: a busy PN532's NAK is an error
+        // code, and the read is not held to Wire's buffer.
+        i2c_inst_t *i2c = wire_ == &Wire1 ? i2c1 : i2c0;
+        if (i2c_read_timeout_us(i2c, I2C_ADDRESS, buf, 1, false, 20000) == 1 && (buf[0] & 0x01)) {
+            int got = i2c_read_timeout_us(i2c, I2C_ADDRESS, buf, len, false, 50000);
+            if (got >= 2 && (buf[0] & 0x01)) {
+                rxLen_ = min((size_t)got - 1, sizeof(rx_));
                 memcpy(rx_, buf + 1, rxLen_);
                 return true;
             }

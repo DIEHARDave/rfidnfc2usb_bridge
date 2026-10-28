@@ -9,6 +9,18 @@ constexpr int MAX_FAILURES = 5;
 // Per command while probing for a PN532 on UART that may not be there.
 constexpr uint32_t PROBE_TIMEOUT_MS = 100;
 
+// The bus objects behind the configured pins. On the RP2040 / RP2350 the
+// pins choose the hardware block; ESP32 and SAMD use the first one.
+#if defined(ARDUINO_ARCH_RP2040)
+TwoWire &wireFor(const Config &c) { return rpI2cBlock(c.sda) ? Wire1 : Wire; }
+SerialUART &uartFor(const Config &c) { return rpUartBlock(c.tx) ? Serial2 : Serial1; }
+SPIClass &spiFor(const Config &c) { return rpSpiBlock(c.sck) ? SPI1 : SPI; }
+#else
+TwoWire &wireFor(const Config &) { return Wire; }
+HardwareSerial &uartFor(const Config &) { return Serial1; }
+SPIClass &spiFor(const Config &) { return SPI; }
+#endif
+
 }  // namespace
 
 void Backend::begin(const Config &config) {
@@ -21,7 +33,7 @@ bool Backend::tryChip(ChipSetting chip, bool probing) {
     switch (chip) {
     case ChipSetting::Pn532I2C:
         if (config_.sda < 0 || config_.scl < 0) return false;
-        pn532_.attachI2C(Wire, config_.sda, config_.scl);
+        pn532_.attachI2C(wireFor(config_), config_.sda, config_.scl);
         // With a line held low every transfer waits for its timeout (about
         // a second each on the classic ESP32), stalling the host link.
         if (!pn532_.pulledUp()) {
@@ -35,20 +47,20 @@ bool Backend::tryChip(ChipSetting chip, bool probing) {
         break;
     case ChipSetting::Pn532Uart:
         if (config_.rx < 0 || config_.tx < 0) return false;
-        pn532_.attachUart(Serial1, config_.rx, config_.tx);
+        pn532_.attachUart(uartFor(config_), config_.rx, config_.tx);
         if (pn532_.init(probing ? PROBE_TIMEOUT_MS : 500)) chip_ = &pn532_;
         else pn532_.end();
         break;
     case ChipSetting::Rc522:
         if (config_.sck < 0 || config_.miso < 0 || config_.mosi < 0 || config_.ss < 0) return false;
-        rc522_.attach(SPI, config_.sck, config_.miso, config_.mosi, config_.ss, config_.rst);
+        rc522_.attach(spiFor(config_), config_.sck, config_.miso, config_.mosi, config_.ss, config_.rst);
         if (rc522_.init()) chip_ = &rc522_;
         else rc522_.end();
         break;
     case ChipSetting::Pn5180:
         if (config_.sck < 0 || config_.miso < 0 || config_.mosi < 0 || config_.ss < 0 || config_.busy < 0)
             return false;
-        pn5180_.attach(SPI, config_.sck, config_.miso, config_.mosi, config_.ss, config_.busy, config_.rst);
+        pn5180_.attach(spiFor(config_), config_.sck, config_.miso, config_.mosi, config_.ss, config_.busy, config_.rst);
         if (pn5180_.init()) chip_ = &pn5180_;
         else pn5180_.end();
         break;
