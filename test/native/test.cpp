@@ -311,7 +311,7 @@ int main() {
     CHECK(cmd(0x14, {0x01, 0x14, 0x01}, d, {0x55, 0x55, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) == 0 && d.empty());
     CHECK(cmd(0x02, {}, d) == 0 && d == Bytes({0x32, 0x01, 0x06, 0x07}));
     CHECK(cmd(0x00, {0x00, 'l', 'i', 'b', 'n', 'f', 'c'}, d) == 0 && d == Bytes({0x00, 'l', 'i', 'b', 'n', 'f', 'c'}));
-    // Short retries (as zmod_nfc sets them), no card: quick empty answer
+    // Short retries (as FF_NFC sets them), no card: quick empty answer
     CHECK(cmd(0x32, {0x05, 0xFF, 0x01, 0x02}, d) == 0);
     uint32_t t0 = fakeMillis;
     CHECK(cmd(0x4A, {0x01, 0x00}, d) == 0 && d == Bytes({0x00}));

@@ -15,7 +15,7 @@ struct NfcTarget {
     uint8_t ats[32] = {};
     uint8_t atsLen = 0;
     // ISO 15693 (NFC-V): uid is the 8 byte UID, most significant byte (E0)
-    // first, as zmod_nfc reports it; atqa and sak stay zero.
+    // first, as FF_NFC reports it; atqa and sak stay zero.
     bool iso15693 = false;
     bool sameCard(const NfcTarget &other) const {
         return uidLen == other.uidLen && memcmp(uid, other.uid, uidLen) == 0;

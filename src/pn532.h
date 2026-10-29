@@ -1,5 +1,5 @@
 // NXP PN532 over I2C or HSU (UART). ISO 14443A only: NTAG / Ultralight,
-// MIFARE Classic and ISO-DEP (Type 4). Port of zmod_nfc's pn532.py; the
+// MIFARE Classic and ISO-DEP (Type 4). Port of FF_NFC's pn532.py; the
 // bridge passes the host's PN532 commands through to it.
 //
 // Board switches: I2C is SEL0=1 SEL1=0 (red/blue "PN532 NFC V3" boards:

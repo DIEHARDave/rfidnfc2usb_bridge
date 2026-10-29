@@ -4,7 +4,7 @@ The bridge is a PN532 on a serial port. The host sends PN532 frames as it
 would to a PN532 module in HSU (UART) mode, as described in the NXP *PN532
 User Manual* (UM0701-02), and gets the PN532's answers. Any PN532 software
 that can use a serial port works unchanged: libnfc (`pn532_uart:` driver),
-nfcpy (`tty:` path), zmod_nfc, the Adafruit and Seeed PN532 libraries.
+nfcpy (`tty:` path), FF_NFC, the Adafruit and Seeed PN532 libraries.
 
 - **Link.** USB CDC-ACM on boards with native USB (any baud rate setting
   works). On classic ESP32 boards, the board's USB-UART chip at

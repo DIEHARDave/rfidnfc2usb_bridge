@@ -3,7 +3,7 @@
 ESP32 firmware that puts a **PN532**, **RC522** (MFRC522) or **PN5180** NFC
 reader on USB. The computer sees one thing whichever chip is fitted: **a
 PN532 on a serial port**. Software that already works with a PN532 over
-UART works with the bridge unchanged: libnfc, nfcpy, zmod_nfc, the
+UART works with the bridge unchanged: libnfc, nfcpy, FF_NFC, the
 Adafruit/Seeed PN532 libraries, and so on.
 
 - **No drivers** on boards with native USB (ESP32-S2, S3, C3, C6): they
@@ -19,12 +19,12 @@ Adafruit/Seeed PN532 libraries, and so on.
   [docs/protocol.md](docs/protocol.md)).
 
 > **Status:** the PN532 on I2C works on hardware: on an ESP32-C3 on
-> Windows (COM port, no driver), auto-detection found the PN532. zmod_nfc's
-> PN532 reader then read an NTAG216 through the bridge (256 bytes in
-> 0.8 s) and decoded its OpenSpool record. The RC522 and PN5180 emulation
-> has not been run on hardware yet. It passes the native tests
-> ([test/native](test/native)), and zmod_nfc read and decoded a mock tag
-> through it over a pseudo-terminal. Its drivers come from
+> Windows (COM port, no driver), auto-detection found the PN532. FF_NFC's
+> (then zmod_nfc's) PN532 reader then read an NTAG216 through the bridge
+> (256 bytes in 0.8 s) and decoded its OpenSpool record. The RC522 and
+> PN5180 emulation has not been run on hardware yet. It passes the native
+> tests ([test/native](test/native)), and FF_NFC (then zmod_nfc) read and
+> decoded a mock tag through it over a pseudo-terminal. Its drivers come from
 > [LaneTag](https://github.com/DIEHARDave/LaneTag), where
 > they have not been run on hardware either. All seven board builds
 > compile.
@@ -195,7 +195,7 @@ Point the software at the serial port as you would for a PN532 on UART at
 
 | Software | Setting |
 |---|---|
-| [zmod_nfc](https://github.com/DIEHARDave/zmod_nfc#usb-bridge-for-pn532-rc522-and-pn5180) (Zmod printers) | `reader: auto` or `reader: pn532` (finds `303A` and CP210x/CH340 ports itself), or `device: /dev/ttyACM0` |
+| [FF_NFC](https://github.com/DIEHARDave/FF_NFC#usb-bridge-for-pn532-rc522-and-pn5180) (Flashforge printers on Zmod or Kiln OS) | `reader: auto` or `reader: pn532` (finds `303A` and CP210x/CH340 ports itself), or `device: /dev/ttyACM0` |
 | libnfc | `device.connstring = "pn532_uart:/dev/ttyACM0"` (Windows: `pn532_uart:COM6`) |
 | nfcpy | `tty:ACM0:pn532` (Linux), `tty:usbmodem1101:pn532` (macOS), `com:COM6:pn532` (Windows) |
 | Adafruit_PN532 / PN532 (Seeed) | the HSU/UART constructor on that port |
@@ -225,7 +225,7 @@ Not available with these chips: target (card emulation) mode, peer-to-peer
 
 `F2 Iso15693Inventory` and `F4 Iso15693Exchange` read and write ICODE
 SLIX/SLIX2 tags (OpenPrintTag). PN532 software doesn't know these
-commands, so it needs a few lines added to use them. zmod_nfc's PN532
+commands, so it needs a few lines added to use them. FF_NFC's PN532
 reader doesn't use them yet.
 
 ## Settings
@@ -256,7 +256,7 @@ sector and survive an upload (`bridgectl.py reset-config` clears them).
 ## How it works
 
 ```
-host (libnfc, zmod_nfc, ...)  --PN532 frames over USB CDC / UART-->  ESP32
+host (libnfc, FF_NFC, ...)    --PN532 frames over USB CDC / UART-->  ESP32
                                                                       |
               Emulator (src/emulator.cpp): PN532 framing, ACK/NACK, abort
                 |                                      |

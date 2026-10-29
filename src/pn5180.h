@@ -1,7 +1,7 @@
 // NXP PN5180 over SPI (plus its BUSY line): ISO 14443A like the PN532
 // (NTAG / Ultralight, MIFARE Classic, ISO-DEP through IsoDep) and ISO 15693
 // (NFC-V: ICODE SLIX/SLIX2, used by OpenPrintTag), which the PN532 and
-// RC522 cannot read. Command layer as in zmod_nfc's readers/pn5180.py.
+// RC522 cannot read. Command layer as in FF_NFC's readers/pn5180.py.
 //
 // The common PN5180 boards want 5 V for the RF stage and 3.3 V for logic.
 #pragma once

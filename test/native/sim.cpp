@@ -1,5 +1,5 @@
 // The emulator behind a pseudo terminal, with a mock NTAG215 holding an
-// OpenSpool record, for host software (zmod_nfc, bridgectl) to talk to.
+// OpenSpool record, for host software (FF_NFC, bridgectl) to talk to.
 #define SIM
 #include "test.cpp"
 
