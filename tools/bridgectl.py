@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Talk to an esp32_rfidnfc2usb_bridge over its serial port: show what it
+"""Talk to an rfidnfc2usb_bridge over its serial port: show what it
 is, change its settings, or print the tags it sees.
 
     python bridgectl.py --port COM6 info
@@ -125,7 +125,7 @@ def cmd_info(link, args):
     print("PN532 firmware: IC 0x%02X, v%d.%d, supports 0x%02X" % tuple(fw[:4]))
     info = bridge_info(link)
     if info is None:
-        print("Not an esp32_rfidnfc2usb_bridge (a real PN532?)")
+        print("Not an rfidnfc2usb_bridge (a real PN532?)")
         return
     chip, vicinity, fields = info
     print("Bridge firmware %s on %s (protocol %s)" % (fields.get("firmware"), fields.get("board"),

@@ -1,14 +1,19 @@
-# esp32_rfidnfc2usb_bridge
+# rfidnfc2usb_bridge
 
-ESP32 firmware that puts a **PN532**, **RC522** (MFRC522) or **PN5180** NFC
-reader on USB. The computer sees one thing whichever chip is fitted: **a
-PN532 on a serial port**. Software that already works with a PN532 over
-UART works with the bridge unchanged: libnfc, nfcpy, FF_NFC, the
-Adafruit/Seeed PN532 libraries, and so on.
+An **RFID/NFC to USB bridge**: firmware for a small microcontroller board
+that puts a **PN532**, **RC522** (MFRC522) or **PN5180** NFC reader on USB.
+It runs on ESP32 boards (classic, S2, S3, C3, C6) and on the Seeed XIAO
+SAMD21 and XIAO RP2350. The computer sees one thing whichever board and
+chip are used: **a PN532 on a serial port**. Software that already works
+with a PN532 over UART works with the bridge unchanged: libnfc, nfcpy,
+FF_NFC, the Adafruit/Seeed PN532 libraries, and so on.
 
-- **No drivers** on boards with native USB (ESP32-S2, S3, C3, C6): they
-  appear as a standard USB CDC-ACM serial port, which Windows 10/11, Linux
-  and macOS support out of the box.
+(This project was called `esp32_rfidnfc2usb_bridge` while it ran only on
+ESP32 boards; the old GitHub URL redirects here.)
+
+- **No drivers** on boards with native USB (ESP32-S2, S3, C3, C6, XIAO
+  SAMD21, XIAO RP2350): they appear as a standard USB CDC-ACM serial port,
+  which Windows 10/11, Linux and macOS support out of the box.
 - **PN532**: commands pass straight through to the chip, so everything the
   PN532 can do still works (type A/B, FeliCa, Jewel, target mode).
 - **RC522 / PN5180**: the bridge emulates a PN532 as an ISO 14443A reader:
@@ -43,6 +48,7 @@ Adafruit/Seeed PN532 libraries, and so on.
 | Board | Shows up as | Windows 10/11 | Linux | macOS |
 |---|---|---|---|---|
 | ESP32-S2, S3, C3, C6 (native USB port) | USB CDC-ACM (VID `303A`) | built-in (`usbser.sys`) | built-in (`cdc_acm`, `/dev/ttyACM*`) | built-in (`/dev/cu.usbmodem*`) |
+| Seeed XIAO SAMD21, XIAO RP2350 | USB CDC-ACM (VID `2886`) | built-in (`usbser.sys`) | built-in (`cdc_acm`, `/dev/ttyACM*`) | built-in (`/dev/cu.usbmodem*`) |
 | Classic ESP32 (CP210x or CH340 USB-UART chip) | that chip's serial port | usually installed by Windows Update | built-in (`/dev/ttyUSB*`) | depends on chip and macOS version; may need the vendor's driver |
 
 Use a native-USB board if the host must work without any driver. On S3
@@ -129,7 +135,7 @@ settings take GPIO numbers:
 
 - **PN532** (red/blue "PN532 NFC V3" boards): I2C is switch 1 ON, 2 OFF; UART
   (HSU) is both OFF. Power from 3.3 V or 5 V (the board has a regulator).
-  On UART, the PN532's TX goes to the ESP32's RX pin and RX to TX.
+  On UART, the PN532's TX goes to the board's RX pin and RX to TX.
   If the PN532 is not found on I2C, try UART: the I2C pins double as the
   UART pins (SDA is TX, SCL is RX), so set both switches OFF, power the
   PN532 off and on (it reads its switches only at power-up), and set the
@@ -148,7 +154,7 @@ settings take GPIO numbers:
 [PlatformIO](https://platformio.org/) (`pip install platformio`):
 
 ```sh
-pio run -e esp32-c3 -t upload       # or esp32-s3, esp32-s2, esp32-c6, esp32dev
+pio run -e esp32-c3 -t upload       # or esp32-s3, esp32-s2, esp32-c6, esp32dev, xiao-samd21, xiao-rp2350
 ```
 
 On the S2, hold **BOOT (0)** while plugging the board in the first time.
@@ -256,7 +262,7 @@ sector and survive an upload (`bridgectl.py reset-config` clears them).
 ## How it works
 
 ```
-host (libnfc, FF_NFC, ...)    --PN532 frames over USB CDC / UART-->  ESP32
+host (libnfc, FF_NFC, ...)    --PN532 frames over USB CDC / UART-->  board
                                                                       |
               Emulator (src/emulator.cpp): PN532 framing, ACK/NACK, abort
                 |                                      |
