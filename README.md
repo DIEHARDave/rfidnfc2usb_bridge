@@ -1,5 +1,7 @@
 # rfidnfc2usb_bridge
 
+> **Parts:** the printers, boards, readers and other gear that go with this project are listed at [projects.die-hard.net/gear](https://projects.die-hard.net/gear) (Amazon affiliate links).
+
 An **RFID/NFC to USB bridge**: firmware for a small microcontroller board
 that puts a **PN532**, **RC522** (MFRC522) or **PN5180** NFC reader on USB.
 It runs on ESP32 boards (classic, S2, S3, C3, C6) and on the Seeed XIAO
