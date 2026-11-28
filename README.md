@@ -1,4 +1,4 @@
-# rfidnfc2usb_bridge
+# LaneTag USB bridge (lanetag-usb-bridge)
 
 > **Parts:** the printers, boards, readers and other gear that go with this project are listed at [projects.die-hard.net/gear](https://projects.die-hard.net/gear) (Amazon affiliate links).
 
@@ -8,10 +8,15 @@ It runs on ESP32 boards (classic, S2, S3, C3, C6) and on the Seeed XIAO
 SAMD21 and XIAO RP2350. The computer sees one thing whichever board and
 chip are used: **a PN532 on a serial port**. Software that already works
 with a PN532 over UART works with the bridge unchanged: libnfc, nfcpy,
-FF_NFC, the Adafruit/Seeed PN532 libraries, and so on.
+lanetag-nfc, the Adafruit/Seeed PN532 libraries, and so on.
 
-(This project was called `esp32_rfidnfc2usb_bridge` while it ran only on
-ESP32 boards; the old GitHub URL redirects here.)
+Part of the LaneTag family, next to
+[lanetag-nfc](https://github.com/DIEHARDave/lanetag-nfc) (the printer plugin,
+LaneTag USB) and [LaneTag](https://github.com/DIEHARDave/LaneTag) (the ESP32
+Wi-Fi reader). This project was called `rfidnfc2usb_bridge`, and
+`esp32_rfidnfc2usb_bridge` before that; the old GitHub URLs redirect here.
+The bridge's own protocol is unchanged: it still answers as
+`RFIDNFC2USB`, so existing boards and `tools/bridgectl.py` keep working.
 
 - **No drivers** on boards with native USB (ESP32-S2, S3, C3, C6, XIAO
   SAMD21, XIAO RP2350): they appear as a standard USB CDC-ACM serial port,
@@ -203,7 +208,7 @@ Point the software at the serial port as you would for a PN532 on UART at
 
 | Software | Setting |
 |---|---|
-| [FF_NFC](https://github.com/DIEHARDave/FF_NFC#usb-bridge-for-pn532-rc522-and-pn5180) (Flashforge printers on Zmod or Kiln OS) | `reader: auto` or `reader: pn532` (finds `303A` and CP210x/CH340 ports itself), or `device: /dev/ttyACM0` |
+| [lanetag-nfc](https://github.com/DIEHARDave/lanetag-nfc#usb-bridge-for-pn532-rc522-and-pn5180) (Klipper printers: Flashforge on Zmod or Kiln OS, FLSUN T1, others) | `reader: auto` or `reader: pn532` (finds `303A` and CP210x/CH340 ports itself), or `device: /dev/ttyACM0` |
 | libnfc | `device.connstring = "pn532_uart:/dev/ttyACM0"` (Windows: `pn532_uart:COM6`) |
 | nfcpy | `tty:ACM0:pn532` (Linux), `tty:usbmodem1101:pn532` (macOS), `com:COM6:pn532` (Windows) |
 | Adafruit_PN532 / PN532 (Seeed) | the HSU/UART constructor on that port |
@@ -233,7 +238,7 @@ Not available with these chips: target (card emulation) mode, peer-to-peer
 
 `F2 Iso15693Inventory` and `F4 Iso15693Exchange` read and write ICODE
 SLIX/SLIX2 tags (OpenPrintTag). PN532 software doesn't know these
-commands, so it needs a few lines added to use them. FF_NFC's PN532
+commands, so it needs a few lines added to use them. lanetag-nfc's PN532
 reader doesn't use them yet.
 
 ## Settings
@@ -264,7 +269,7 @@ sector and survive an upload (`bridgectl.py reset-config` clears them).
 ## How it works
 
 ```
-host (libnfc, FF_NFC, ...)    --PN532 frames over USB CDC / UART-->  board
+host (libnfc, lanetag-nfc)    --PN532 frames over USB CDC / UART-->  board
                                                                       |
               Emulator (src/emulator.cpp): PN532 framing, ACK/NACK, abort
                 |                                      |

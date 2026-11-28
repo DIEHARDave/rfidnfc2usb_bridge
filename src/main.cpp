@@ -1,4 +1,4 @@
-// rfidnfc2usb_bridge: a PN532, RC522 or PN5180 on an ESP32 (or a XIAO SAMD21
+// lanetag-usb-bridge (formerly rfidnfc2usb_bridge): a PN532, RC522 or PN5180 on an ESP32 (or a XIAO SAMD21
 // or RP2350) that the host sees as a PN532 on a serial port. Boards with
 // native USB (S2, S3, C3, C6, XIAO) appear as a USB CDC-ACM device, which Windows 10+, Linux and
 // macOS drive without extra drivers; classic ESP32 boards use their
