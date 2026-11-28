@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo/lanetag-usb-bridge-logo-dark.svg">
+  <img alt="LaneTag USB bridge" src="docs/logo/lanetag-usb-bridge-logo.svg" width="540">
+</picture>
+
 # LaneTag USB bridge (lanetag-usb-bridge)
 
 > **Parts:** the printers, boards, readers and other gear that go with this project are listed at [projects.die-hard.net/gear](https://projects.die-hard.net/gear) (Amazon affiliate links).
