@@ -6,8 +6,9 @@ Usage: python make_logo.py LANETAG_LOGO_DIR Poppins-Bold.ttf OUTPUT_DIR
 LANETAG_LOGO_DIR is LaneTag's docs/logo (lanetag-logo.svg,
 lanetag-mark.svg). The bridge keeps LaneTag's spool, reader card and ESP32
 board, and a USB plug comes out of the board: the board puts the reader on
-USB. The orange accent becomes purple, and a "BRIDGE" tag follows the
+USB. The orange accent becomes purple, and a "BRIDGE" tag sits under the
 wordmark (Poppins Bold, SIL OFL, converted to outlines like LaneTag's).
+LaneTag's canvas and wordmark size are kept, so the family logos line up.
 Needs fontTools. Sister of lanetag-nfc's docs/logo/make_logo.py (teal,
 "USB").
 """
@@ -16,6 +17,7 @@ import os
 import re
 import sys
 
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
@@ -114,16 +116,38 @@ def text_path(text, x, baseline, size, color, path_id, tracking=0.02):
     return '<path id="%s" fill="%s" d="%s"/>' % (path_id, color, "".join(ds)), px - x - tracking * size
 
 
-def tag(x, baseline, word):
-    """Purple tag after the wordmark, its bottom on the wordmark's baseline."""
-    size, pad_x, h = 40, 16, 64
+
+def wordmark_ink():
+    """Ink box of LaneTag's wordmark (LaneTag make_logo.py: x 444,
+    baseline 244, size 128, tracking -0.01)."""
+    font = TTFont(FONT)
+    gs, cmap = font.getGlyphSet(), font.getBestCmap()
+    s = 128 / font["head"].unitsPerEm
+    pen_x, box = 444, None
+    for ch in "LaneTag":
+        g = gs[cmap[ord(ch)]]
+        bp = BoundsPen(gs)
+        g.draw(TransformPen(bp, (s, 0, 0, -s, pen_x, 244)))
+        if bp.bounds:
+            b = bp.bounds
+            box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]), max(box[2], b[2]), max(box[3], b[3]))
+        pen_x += g.width * s - 0.01 * 128
+    return box
+
+
+def tag(word):
+    """Purple tag under the wordmark, right-aligned with its ink; the
+    canvas and the wordmark stay exactly LaneTag's."""
+    size, pad_x, h, gap = 40, 16, 56, 18
+    x0, _, x1, y1 = wordmark_ink()      # y1: bottom of the "g"
     _, w = text_path(word, 0, 0, size, WHITE, "word-tag")
     tw = w + 2 * pad_x
-    top = baseline - h
+    x, top = x1 - tw, y1 + gap
+    # cap height of Poppins Bold ~0.7 em: centre the letters in the tag
     glyphs, _ = text_path(word, x + pad_x, top + h / 2 + 0.35 * size, size, WHITE,
                           "word-" + word.lower())
-    rect = '<rect x="%s" y="%s" width="%s" height="%d" rx="14" fill="%s"/>' % (f(x), f(top), f(tw), h, PURPLE)
-    return '<g id="%s-tag">\n%s\n%s\n</g>' % (word.lower(), rect, glyphs), tw
+    rect = '<rect x="%s" y="%s" width="%s" height="%d" rx="12" fill="%s"/>' % (f(x), f(top), f(tw), h, PURPLE)
+    return '<g id="%s-tag">\n%s\n%s\n</g>' % (word.lower(), rect, glyphs)
 
 
 def lockup(src_svg, lane_color):
@@ -133,11 +157,7 @@ def lockup(src_svg, lane_color):
     if 'id="usb-plug"' not in svg:
         raise SystemExit("no esp32 group in " + SRC)
     svg = re.sub(r'(<path id="word-lane" fill=")[^"]+', r"\g<1>" + lane_color, svg)
-    width = float(re.search(r'viewBox="0 0 ([\d.]+) ', svg).group(1))
-    t, tw = tag(width - 20 + 22, 244, "BRIDGE")
-    new_w = math.ceil(width + 22 + tw)
-    svg = svg.replace('viewBox="0 0 %s 400" width="%s"' % (f(width), f(width)),
-                      'viewBox="0 0 %d 400" width="%d"' % (new_w, new_w))
+    t = tag("BRIDGE")
     svg = svg.replace("<title>LaneTag</title>", "<title>LaneTag USB bridge (lanetag-usb-bridge)</title>")
     return svg.replace("</svg>", t + "\n</svg>")
 
